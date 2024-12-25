@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Christmas Tech Elf Pong (Mobile-Friendly)</title>
+    <title>Christmas Tech Elf Database</title>
     <style>
         /* Body styling: a subtle cosmic/holiday vibe */
         body {
@@ -14,6 +14,8 @@
             text-align: center;
             background: radial-gradient(circle at top, #0f2027, #203a43, #2c5364);
             color: #ecf0f1;
+            /* Prevent browser zoom/scroll on touch */
+            touch-action: none;
         }
 
         h1 {
@@ -32,9 +34,8 @@
             background-color: rgba(255, 255, 255, 0.1);
         }
 
+        /* Canvas: internal dimension is 600x400, but we let CSS scale it responsively */
         #gameCanvas {
-            /* Keep an internal resolution of 600x400,
-         but let it resize responsively. */
             width: 100%;
             max-width: 600px;
             height: auto;
@@ -45,13 +46,13 @@
             border: 2px solid #f39c12;
         }
 
-        #levelAnnouncement,
+        #announcement,
         #info {
             margin-top: 10px;
             font-weight: bold;
             color: #1abc9c;
             display: none;
-            /* hidden until game starts */
+            /* shown during a game */
         }
 
         #footerMessage {
@@ -59,7 +60,7 @@
             color: #f1c40f;
             font-style: italic;
             display: none;
-            /* hidden until game starts */
+            /* shown during a game */
         }
 
         button {
@@ -80,357 +81,615 @@
         /* On-screen mobile controls */
         #mobileControls {
             display: none;
-            /* We'll show this once the game starts */
             margin-top: 15px;
         }
 
-        #btnUp,
-        #btnDown {
-            margin: 0 10px;
-            font-size: 16px;
+        #mobileControls button {
+            margin: 5px;
+            font-size: 14px;
         }
 
-        /* Optional: Hide on-screen controls on wider screens if you prefer 
-       You can tweak or remove this media query if you want them always visible */
         @media (min-width: 800px) {
+
+            /* Hide on-screen controls on large screens if desired */
             #mobileControls {
                 display: none !important;
-                /* Force hide on large screens */
             }
         }
     </style>
 </head>
 
 <body>
-    <h1>Christmas Tech Elf Pong</h1>
+    <h1>Christmas Tech Elf Database</h1>
 
-    <!-- Story and "Begin" button -->
+    <!-- NEW STORYLINE COPY -->
     <div id="storyline">
         <p>
-            A <strong>rogue robot elf</strong> in Santa’s workshop has gone haywire—he’s locked all the Christmas
-            presents in a futuristic storage container.
-            The only way to open it is by entering the <em>correct access code</em> into his top-secret database
-            interface.
+            A rogue robot elf in Santa’s workshop has gone haywire—he’s locked all the Christmas presents
+            in a futuristic storage container. The only way to open it is by entering the correct access
+            code into his top-secret database interface.
         </p>
         <p>
             However, this mischievous elf didn’t make it easy. To retrieve the code, you must beat his
-            <strong>three-level Pong security system</strong>. Control the <em>red paddle</em>, bounce
-            the <em>green ball</em>, and rack up enough hits in each level to progress. Each level
+            three-level game security system. Control the red paddle, bounce the green ball, beat a game
+            of snake, and destroy asteroids, and rack up enough hits in each level to progress. Each level
             grants you a piece of the code.
         </p>
         <p>
             Santa is counting on you—can you outsmart the evil robot elf and save Christmas?
         </p>
-        <button onclick="startGame()">Begin the Challenge!</button>
+        <button onclick="startOverall()">Begin the Challenge!</button>
     </div>
 
-    <!-- The game canvas -->
-    <!-- Note: we keep internal resolution at 600x400, but let CSS scale it -->
     <canvas id="gameCanvas" width="600" height="400"></canvas>
 
-    <!-- Level and status text -->
-    <div id="levelAnnouncement"></div>
+    <div id="announcement"></div>
     <div id="info"></div>
     <div id="footerMessage">All is not lost... yet!</div>
 
     <!-- On-screen controls (mobile/touch) -->
     <div id="mobileControls">
-        <button id="btnUp">Move Paddle Up</button>
-        <button id="btnDown">Move Paddle Down</button>
+        <!-- We'll dynamically show/hide relevant controls for each game -->
+        <div id="pongControls" style="display: none;">
+            <button id="pongUp">Up</button>
+            <button id="pongDown">Down</button>
+        </div>
+        <div id="snakeControls" style="display: none;">
+            <button id="snakeUp">Up</button>
+            <button id="snakeLeft">Left</button>
+            <button id="snakeDown">Down</button>
+            <button id="snakeRight">Right</button>
+        </div>
+        <div id="asteroidsControls" style="display: none;">
+            <button id="astLeft">Left</button>
+            <button id="astRight">Right</button>
+            <button id="astShoot">Shoot</button>
+        </div>
     </div>
 
     <script>
-        /********************************************************
-         *                GAME STATE AND SETTINGS               *
-         ********************************************************/
         const canvas = document.getElementById("gameCanvas");
         const ctx = canvas.getContext("2d");
 
-        // Paddle (red rectangle) properties
-        const paddleWidth = 10;
-        let paddleHeight = 80;        // We'll tweak this per level if needed
-        let paddleY = (canvas.height - paddleHeight) / 2;
-        const paddleX = 30;           // Distance from left edge
+        // We have 3 games: PONG, SNAKE, ASTEROIDS
+        let currentGameIndex = 0;
+        const totalGames = 3;
+        // The digits we reveal after each mini-game
+        const codeDigits = ["6", "2", "1"];
 
-        // Ball (green circle) properties
-        let ballRadius = 12;          // Circle radius
-        let ballX = canvas.width / 2;
-        let ballY = canvas.height / 2;
-        let ballDX = 4;               // horizontal speed
-        let ballDY = 3;               // vertical speed
-
-        // Movement controls (desktop)
-        let upPressed = false;
-        let downPressed = false;
-        let wPressed = false;
-        let sPressed = false;
-
-        // Movement controls (mobile/touch)
-        let moveUp = false;
-        let moveDown = false;
-
-        // Levels, hints, and scoring
-        let currentLevel = 1;
-        const totalLevels = 3;
-        const levelHints = ["6", "2", "1"];  // The code digits
-        const hitsNeededPerLevel = [5, 7, 9];
-        let hitsThisLevel = 0;
-
-        // State flags
-        let levelComplete = false;
-        let gameOver = false;
+        // General game flow flags
         let gameStarted = false;
+        let gameOver = false;     // "Over" for the current mini-game
+        let hasGameEnded = false; // used to avoid continuing loops once done
+
+        // DOM references
+        const announcementEl = document.getElementById("announcement");
+        const infoEl = document.getElementById("info");
+        const footerEl = document.getElementById("footerMessage");
+        const mobileControls = document.getElementById("mobileControls");
 
         /********************************************************
-         *               EVENT LISTENERS (DESKTOP)              *
+         * 1. GLOBAL START: user clicks “Begin the Challenge!”  *
          ********************************************************/
-        document.addEventListener("keydown", keyDownHandler);
-        document.addEventListener("keyup", keyUpHandler);
+        function startOverall() {
+            document.getElementById("storyline").style.display = "none";
+            canvas.style.display = "block";
+            announcementEl.style.display = "block";
+            infoEl.style.display = "block";
+            footerEl.style.display = "block";
+            mobileControls.style.display = "block";
 
-        function keyDownHandler(e) {
-            if (e.key === "ArrowUp") {
-                upPressed = true;
-            } else if (e.key === "ArrowDown") {
-                downPressed = true;
-            } else if (e.key.toLowerCase() === "w") {
-                wPressed = true;
-            } else if (e.key.toLowerCase() === "s") {
-                sPressed = true;
-            }
-        }
-
-        function keyUpHandler(e) {
-            if (e.key === "ArrowUp") {
-                upPressed = false;
-            } else if (e.key === "ArrowDown") {
-                downPressed = false;
-            } else if (e.key.toLowerCase() === "w") {
-                wPressed = false;
-            } else if (e.key.toLowerCase() === "s") {
-                sPressed = false;
-            }
+            currentGameIndex = 1;
+            startGame();
         }
 
         /********************************************************
-         *             EVENT LISTENERS (MOBILE TOUCH)           *
-         ********************************************************/
-        const btnUp = document.getElementById("btnUp");
-        const btnDown = document.getElementById("btnDown");
-
-        // Mouse/Touch events for the Up button
-        btnUp.addEventListener("mousedown", () => { moveUp = true; });
-        btnUp.addEventListener("mouseup", () => { moveUp = false; });
-        btnUp.addEventListener("touchstart", (e) => {
-            e.preventDefault();
-            moveUp = true;
-        });
-        btnUp.addEventListener("touchend", () => { moveUp = false; });
-
-        // Mouse/Touch events for the Down button
-        btnDown.addEventListener("mousedown", () => { moveDown = true; });
-        btnDown.addEventListener("mouseup", () => { moveDown = false; });
-        btnDown.addEventListener("touchstart", (e) => {
-            e.preventDefault();
-            moveDown = true;
-        });
-        btnDown.addEventListener("touchend", () => { moveDown = false; });
-
-        /********************************************************
-         *                 LEVEL SETUP                          *
-         ********************************************************/
-        function setupLevel(level) {
-            // Reset ball to center
-            ballX = canvas.width / 2;
-            ballY = canvas.height / 2;
-
-            // Adjust difficulty by level
-            switch (level) {
-                case 1:
-                    paddleHeight = 80;
-                    ballDX = 4;
-                    ballDY = 3;
-                    break;
-                case 2:
-                    paddleHeight = 70;
-                    ballDX = 5;
-                    ballDY = 4;
-                    break;
-                case 3:
-                    paddleHeight = 60;
-                    ballDX = 6;
-                    ballDY = 5;
-                    break;
-                default:
-                    endGame();
-                    return;
-            }
-
-            paddleY = (canvas.height - paddleHeight) / 2;
-            hitsThisLevel = 0;
-            levelComplete = false;
-
-            document.getElementById("levelAnnouncement").textContent =
-                "LEVEL " + level + ": Evil Elf's Security Barrier #" + level;
-            document.getElementById("info").textContent =
-                "Hits needed to bypass: " + hitsNeededPerLevel[level - 1];
-        }
-
-        /********************************************************
-         *                MAIN GAME LOOP                        *
-         ********************************************************/
-        function update() {
-            if (!gameStarted || gameOver) return;
-
-            // Move paddle (desktop)
-            if (upPressed || wPressed) {
-                paddleY -= 6;
-            }
-            if (downPressed || sPressed) {
-                paddleY += 6;
-            }
-
-            // Move paddle (mobile)
-            if (moveUp) {
-                paddleY -= 6;
-            }
-            if (moveDown) {
-                paddleY += 6;
-            }
-
-            // Constrain paddle
-            if (paddleY < 0) paddleY = 0;
-            if (paddleY + paddleHeight > canvas.height) {
-                paddleY = canvas.height - paddleHeight;
-            }
-
-            // Move ball
-            ballX += ballDX;
-            ballY += ballDY;
-
-            // Ball collision with top/bottom
-            if (ballY - ballRadius < 0) {
-                ballY = ballRadius;
-                ballDY = -ballDY;
-            } else if (ballY + ballRadius > canvas.height) {
-                ballY = canvas.height - ballRadius;
-                ballDY = -ballDY;
-            }
-
-            // Check collision with the paddle
-            if (
-                // Ball's leftmost edge <= Paddle's right edge
-                (ballX - ballRadius) <= (paddleX + paddleWidth) &&
-                // Ball's rightmost edge >= Paddle's left edge
-                (ballX + ballRadius) >= paddleX &&
-                // Ball's bottom edge >= top of paddle
-                (ballY + ballRadius) >= paddleY &&
-                // Ball's top edge <= bottom of paddle
-                (ballY - ballRadius) <= (paddleY + paddleHeight)
-            ) {
-                // Bounce off the paddle
-                // Place the ball just to the right of the paddle to avoid 'sticking'
-                ballX = paddleX + paddleWidth + ballRadius;
-                ballDX = -ballDX;
-                hitsThisLevel++;
-                document.getElementById("info").textContent =
-                    "Hits so far: " + hitsThisLevel + " / " + hitsNeededPerLevel[currentLevel - 1];
-
-                // Check if level is beaten
-                if (hitsThisLevel >= hitsNeededPerLevel[currentLevel - 1]) {
-                    levelComplete = true;
-                    levelUp();
-                }
-            }
-
-            // If ball goes past left edge
-            if (ballX + ballRadius < 0) {
-                // Reset ball to center
-                ballX = canvas.width / 2;
-                ballY = canvas.height / 2;
-                // Flip direction so it heads right again
-                ballDX = -ballDX;
-            }
-
-            // If ball hits right boundary
-            if (ballX + ballRadius > canvas.width) {
-                ballX = canvas.width - ballRadius;
-                ballDX = -ballDX;
-            }
-
-            draw();
-            requestAnimationFrame(update);
-        }
-
-        /********************************************************
-         *                     DRAWING                          *
-         ********************************************************/
-        function draw() {
-            // Clear the whole canvas
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-            // Draw the red paddle
-            ctx.fillStyle = "#e74c3c";  // bright red
-            ctx.fillRect(paddleX, paddleY, paddleWidth, paddleHeight);
-
-            // Draw the green ball (circle)
-            ctx.beginPath();
-            ctx.arc(ballX, ballY, ballRadius, 0, Math.PI * 2);
-            ctx.fillStyle = "#27ae60"; // bright green
-            ctx.fill();
-            ctx.closePath();
-        }
-
-        /********************************************************
-         *           LEVEL PROGRESSION & ENDING                 *
-         ********************************************************/
-        function levelUp() {
-            if (currentLevel > totalLevels) return;
-
-            alert(
-                "Security Barrier #" + currentLevel + " breached!\n" +
-                "The Evil Elf grudgingly reveals a code digit: '" + levelHints[currentLevel - 1] + "'"
-            );
-
-            currentLevel++;
-            if (currentLevel <= totalLevels) {
-                setupLevel(currentLevel);
-            } else {
-                endGame();
-            }
-        }
-
-        function endGame() {
-            gameOver = true;
-            document.getElementById("levelAnnouncement").textContent =
-                "ALL BARRIERS BYPASSED!";
-            document.getElementById("info").innerHTML = `
-        <strong>Access Code Retrieved:</strong><br>
-        Level 1: '${levelHints[0]}'<br>
-        Level 2: '${levelHints[1]}'<br>
-        Level 3: '${levelHints[2]}'<br><br>
-        <em>Use this code to unlock the presents!</em>
-      `;
-            document.getElementById("footerMessage").textContent =
-                "You’ve outsmarted the evil robot elf! Christmas is saved!";
-        }
-
-        /********************************************************
-         *               GAME START FUNCTION                    *
+         *      SWITCHING BETWEEN GAMES (PONG -> SNAKE ...)     *
          ********************************************************/
         function startGame() {
-            // Hide storyline, show canvas & text
-            document.getElementById("storyline").style.display = "none";
-
-            document.getElementById("gameCanvas").style.display = "block";
-            document.getElementById("levelAnnouncement").style.display = "block";
-            document.getElementById("info").style.display = "block";
-            document.getElementById("footerMessage").style.display = "block";
-            document.getElementById("mobileControls").style.display = "block";
-
             gameStarted = true;
-            currentLevel = 1;
-            setupLevel(currentLevel);
-            update();
+            gameOver = false;
+            hasGameEnded = false;
+
+            // Clear any old event listeners or states from previous game
+            clearAllListeners();
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            if (currentGameIndex === 1) {
+                startPong();
+            } else if (currentGameIndex === 2) {
+                startSnake();
+            } else if (currentGameIndex === 3) {
+                startAsteroids();
+            }
+        }
+
+        // Once a game is beaten
+        function finishGame() {
+            gameOver = true;
+            hasGameEnded = true;
+            alert("Security Barrier #" + currentGameIndex + " breached!\nThe Tech-Elf grudgingly reveals a code digit:'" + codeDigits[currentGameIndex - 1] + "'");
+
+            currentGameIndex++;
+            if (currentGameIndex <= totalGames) {
+                startGame();
+            } else {
+                endAllGames();
+            }
+        }
+
+        function endAllGames() {
+            announcementEl.textContent = "ALL GAMES COMPLETED!";
+            infoEl.innerHTML = `
+        <strong>Access Code Retrieved:</strong><br>
+        1) '${codeDigits[0]}'<br>
+        2) '${codeDigits[1]}'<br>
+        3) '${codeDigits[2]}'<br><br>
+        <em>Use this code to unlock the presents!</em>
+      `;
+            footerEl.textContent = "You’ve outsmarted the evil robot elf! Christmas is saved!";
+        }
+
+        function clearAllListeners() {
+            // Remove or reset any event listeners from prior games
+            document.onkeydown = null;
+            document.onkeyup = null;
+            removeMobileListeners();
+            hideAllMobileControls();
+        }
+
+        function hideAllMobileControls() {
+            document.getElementById("pongControls").style.display = "none";
+            document.getElementById("snakeControls").style.display = "none";
+            document.getElementById("asteroidsControls").style.display = "none";
+        }
+
+        /********************************************************
+         *                 MOBILE LISTENER HELPER               *
+         ********************************************************/
+        const listeners = []; // store references so we can remove them
+        function addMobileListener(element, event, handler) {
+            element.addEventListener(event, (e) => {
+                e.preventDefault();
+                handler();
+            });
+            listeners.push({ element, event, handler });
+        }
+        function removeMobileListeners() {
+            listeners.forEach(({ element, event, handler }) => {
+                element.removeEventListener(event, handler);
+            });
+            listeners.length = 0;
+        }
+
+        /********************************************************
+         *                     GAME #1: PONG                     *
+         ********************************************************/
+        function startPong() {
+            announcementEl.textContent = "LEVEL 1: Tech-Elf's Security Barrier #1";
+            infoEl.textContent = "Bounce the green ball 5 times to win!";
+
+            // Show only Pong controls
+            document.getElementById("pongControls").style.display = "block";
+
+            // Minimal Pong variables
+            let paddleX = 30, paddleWidth = 10, paddleHeight = 80;
+            let paddleY = (canvas.height - paddleHeight) / 2;
+            let ballRadius = 12;
+            let ballX = canvas.width / 2;
+            let ballY = canvas.height / 2;
+            let ballDX = 4, ballDY = 3;
+            let hits = 0;
+            let upPressed = false, downPressed = false;
+
+            // Desktop keyboard events
+            document.onkeydown = (e) => {
+                if (e.key === "ArrowUp" || e.key.toLowerCase() === "w") upPressed = true;
+                if (e.key === "ArrowDown" || e.key.toLowerCase() === "s") downPressed = true;
+            };
+            document.onkeyup = (e) => {
+                if (e.key === "ArrowUp" || e.key.toLowerCase() === "w") upPressed = false;
+                if (e.key === "ArrowDown" || e.key.toLowerCase() === "s") downPressed = false;
+            };
+
+            // Mobile button events
+            const pongUp = document.getElementById("pongUp");
+            const pongDown = document.getElementById("pongDown");
+            let pongMoveUp = false, pongMoveDown = false;
+
+            function onPongUpStart() { pongMoveUp = true; }
+            function onPongUpEnd() { pongMoveUp = false; }
+            function onPongDownStart() { pongMoveDown = true; }
+            function onPongDownEnd() { pongMoveDown = false; }
+
+            addMobileListener(pongUp, "mousedown", onPongUpStart);
+            addMobileListener(pongUp, "mouseup", onPongUpEnd);
+            addMobileListener(pongUp, "touchstart", onPongUpStart);
+            addMobileListener(pongUp, "touchend", onPongUpEnd);
+
+            addMobileListener(pongDown, "mousedown", onPongDownStart);
+            addMobileListener(pongDown, "mouseup", onPongDownEnd);
+            addMobileListener(pongDown, "touchstart", onPongDownStart);
+            addMobileListener(pongDown, "touchend", onPongDownEnd);
+
+            // Pong update loop
+            function pongUpdate() {
+                if (gameOver || hasGameEnded || currentGameIndex !== 1) return;
+                requestAnimationFrame(pongUpdate);
+
+                // Move paddle
+                if (upPressed || pongMoveUp) paddleY -= 6;
+                if (downPressed || pongMoveDown) paddleY += 6;
+                if (paddleY < 0) paddleY = 0;
+                if (paddleY + paddleHeight > canvas.height) paddleY = canvas.height - paddleHeight;
+
+                // Move ball
+                ballX += ballDX;
+                ballY += ballDY;
+
+                if (ballY - ballRadius < 0) {
+                    ballY = ballRadius;
+                    ballDY = -ballDY;
+                } else if (ballY + ballRadius > canvas.height) {
+                    ballY = canvas.height - ballRadius;
+                    ballDY = -ballDY;
+                }
+
+                // Check collision with paddle
+                if (
+                    (ballX - ballRadius) <= (paddleX + paddleWidth) &&
+                    (ballY + ballRadius) >= paddleY &&
+                    (ballY - ballRadius) <= (paddleY + paddleHeight)
+                ) {
+                    // Bounce
+                    ballX = paddleX + paddleWidth + ballRadius;
+                    ballDX = -ballDX;
+                    hits++;
+                    infoEl.textContent = `Hits so far: ${hits} / 5`;
+                    if (hits >= 5) {
+                        finishGame(); // done with Pong
+                        return;
+                    }
+                }
+
+                // Missed on the left
+                if (ballX + ballRadius < 0) {
+                    // Reset
+                    ballX = canvas.width / 2;
+                    ballY = canvas.height / 2;
+                    ballDX = -ballDX;
+                }
+
+                // Right boundary
+                if (ballX + ballRadius > canvas.width) {
+                    ballX = canvas.width - ballRadius;
+                    ballDX = -ballDX;
+                }
+
+                // Draw
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                // Paddle
+                ctx.fillStyle = "#e74c3c";
+                ctx.fillRect(paddleX, paddleY, paddleWidth, paddleHeight);
+                // Ball
+                ctx.beginPath();
+                ctx.arc(ballX, ballY, ballRadius, 0, Math.PI * 2);
+                ctx.fillStyle = "#27ae60";
+                ctx.fill();
+            }
+            pongUpdate();
+        }
+
+        /********************************************************
+         *                  GAME #2: SNAKE  (SLOWER)            *
+         ********************************************************/
+        function startSnake() {
+            announcementEl.textContent = "LEVEL 2: Tech-Elf's Security Barrier #2";
+            infoEl.textContent = "Eat 5 apples to win!";
+
+            // Show only Snake controls
+            document.getElementById("snakeControls").style.display = "block";
+
+            // Minimal Snake setup (with slower update pace)
+            let gridSize = 20;
+            let snake = [{ x: 10, y: 10 }];
+            let vx = 0, vy = 0; // velocity
+            let apple = { x: 15, y: 10 };
+            let snakeLength = 1;
+            let applesEaten = 0;
+
+            // Keyboard events
+            document.onkeydown = (e) => {
+                if (e.key === "ArrowUp" || e.key.toLowerCase() === "w") { vx = 0; vy = -1; }
+                if (e.key === "ArrowDown" || e.key.toLowerCase() === "s") { vx = 0; vy = 1; }
+                if (e.key === "ArrowLeft" || e.key.toLowerCase() === "a") { vx = -1; vy = 0; }
+                if (e.key === "ArrowRight" || e.key.toLowerCase() === "d") { vx = 1; vy = 0; }
+            };
+
+            // Mobile controls
+            const sUp = document.getElementById("snakeUp");
+            const sLeft = document.getElementById("snakeLeft");
+            const sDown = document.getElementById("snakeDown");
+            const sRight = document.getElementById("snakeRight");
+
+            function snakeUp() { vx = 0; vy = -1; }
+            function snakeDown() { vx = 0; vy = 1; }
+            function snakeLeft() { vx = -1; vy = 0; }
+            function snakeRight() { vx = 1; vy = 0; }
+
+            addMobileListener(sUp, "mousedown", snakeUp);
+            addMobileListener(sUp, "touchstart", snakeUp);
+            addMobileListener(sDown, "mousedown", snakeDown);
+            addMobileListener(sDown, "touchstart", snakeDown);
+            addMobileListener(sLeft, "mousedown", snakeLeft);
+            addMobileListener(sLeft, "touchstart", snakeLeft);
+            addMobileListener(sRight, "mousedown", snakeRight);
+            addMobileListener(sRight, "touchstart", snakeRight);
+
+            // We’ll call snakeUpdate via setTimeout for slower pace
+            function snakeUpdate() {
+                if (gameOver || hasGameEnded || currentGameIndex !== 2) return;
+
+                // Move snake
+                let head = { x: snake[0].x + vx, y: snake[0].y + vy };
+                snake.unshift(head); // put new head at front
+
+                // If we have more than snakeLength segments, pop the tail
+                while (snake.length > snakeLength) snake.pop();
+
+                // Check apple
+                if (head.x === apple.x && head.y === apple.y) {
+                    applesEaten++;
+                    snakeLength++;
+                    infoEl.textContent = `Apples eaten: ${applesEaten} / 5`;
+                    // relocate apple
+                    apple.x = Math.floor(Math.random() * (canvas.width / gridSize));
+                    apple.y = Math.floor(Math.random() * (canvas.height / gridSize));
+                    if (apple.x < 0) apple.x = 0;
+                    if (apple.y < 0) apple.y = 0;
+                    // Win condition
+                    if (applesEaten >= 5) {
+                        finishGame(); // done with Snake
+                        return;
+                    }
+                }
+
+                // Check collision with walls
+                if (
+                    head.x < 0 || head.x >= (canvas.width / gridSize) ||
+                    head.y < 0 || head.y >= (canvas.height / gridSize)
+                ) {
+                    alert("Snake crashed into a wall! Let's reset this game...");
+                    snake = [{ x: 10, y: 10 }];
+                    vx = 0; vy = 0;
+                    snakeLength = 1;
+                    applesEaten = 0;
+                    infoEl.textContent = "Apples eaten: 0 / 5";
+                }
+
+                // Check collision with self
+                for (let i = 1; i < snake.length; i++) {
+                    if (head.x === snake[i].x && head.y === snake[i].y) {
+                        alert("Snake ate itself! Resetting...");
+                        snake = [{ x: 10, y: 10 }];
+                        vx = 0; vy = 0;
+                        snakeLength = 1;
+                        applesEaten = 0;
+                        infoEl.textContent = "Apples eaten: 0 / 5";
+                    }
+                }
+
+                // Draw
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                // Draw snake
+                ctx.fillStyle = "#e74c3c";
+                for (let s of snake) {
+                    ctx.fillRect(s.x * gridSize, s.y * gridSize, gridSize, gridSize);
+                }
+
+                // Draw apple
+                ctx.fillStyle = "#27ae60";
+                ctx.fillRect(apple.x * gridSize, apple.y * gridSize, gridSize, gridSize);
+
+                // Schedule next update in 200ms (slower pace)
+                setTimeout(snakeUpdate, 200);
+            }
+
+            snakeUpdate();
+        }
+
+        /********************************************************
+         *                GAME #3: ASTEROIDS                    *
+         ********************************************************/
+        function startAsteroids() {
+            announcementEl.textContent = "LEVEL 3: Tech-Elf's Security Barrier #3";
+            infoEl.textContent = "Destroy 5 asteroids to win! (Left, Right, Shoot)\nAvoid collisions or you must reset.";
+
+            // Show only Asteroids controls
+            document.getElementById("asteroidsControls").style.display = "block";
+
+            let ship = {
+                x: canvas.width / 2,
+                y: canvas.height / 2,
+                angle: 0,
+            };
+            let bullets = [];
+            let asteroids = [];
+            let kills = 0;
+
+            // Spawn some asteroids
+            for (let i = 0; i < 5; i++) {
+                asteroids.push({
+                    x: Math.random() * canvas.width,
+                    y: Math.random() * canvas.height,
+                    dx: (Math.random() - 0.5) * 2,
+                    dy: (Math.random() - 0.5) * 2,
+                    r: 20 + Math.random() * 20
+                });
+            }
+
+            let leftPressed = false, rightPressed = false, shootPressed = false;
+
+            // Desktop keyboard
+            document.onkeydown = (e) => {
+                if (e.key === "ArrowLeft" || e.key.toLowerCase() === "a") leftPressed = true;
+                if (e.key === "ArrowRight" || e.key.toLowerCase() === "d") rightPressed = true;
+                if (e.key === " ") shootPressed = true;
+            };
+            document.onkeyup = (e) => {
+                if (e.key === "ArrowLeft" || e.key.toLowerCase() === "a") leftPressed = false;
+                if (e.key === "ArrowRight" || e.key.toLowerCase() === "d") rightPressed = false;
+                if (e.key === " ") shootPressed = false;
+            };
+
+            // Mobile
+            const astLeft = document.getElementById("astLeft");
+            const astRight = document.getElementById("astRight");
+            const astShoot = document.getElementById("astShoot");
+
+            function onLeftDown() { leftPressed = true; }
+            function onLeftUp() { leftPressed = false; }
+            function onRightDown() { rightPressed = true; }
+            function onRightUp() { rightPressed = false; }
+            function onShootDown() { shootPressed = true; }
+            function onShootUp() { shootPressed = false; }
+
+            addMobileListener(astLeft, "mousedown", onLeftDown);
+            addMobileListener(astLeft, "mouseup", onLeftUp);
+            addMobileListener(astLeft, "touchstart", onLeftDown);
+            addMobileListener(astLeft, "touchend", onLeftUp);
+
+            addMobileListener(astRight, "mousedown", onRightDown);
+            addMobileListener(astRight, "mouseup", onRightUp);
+            addMobileListener(astRight, "touchstart", onRightDown);
+            addMobileListener(astRight, "touchend", onRightUp);
+
+            addMobileListener(astShoot, "mousedown", onShootDown);
+            addMobileListener(astShoot, "mouseup", onShootUp);
+            addMobileListener(astShoot, "touchstart", onShootDown);
+            addMobileListener(astShoot, "touchend", onShootUp);
+
+            function shootBullet() {
+                bullets.push({
+                    x: ship.x,
+                    y: ship.y,
+                    dx: Math.cos(ship.angle) * 5,
+                    dy: Math.sin(ship.angle) * 5,
+                    life: 60 // frames
+                });
+            }
+
+            function asteroidsUpdate() {
+                if (gameOver || hasGameEnded || currentGameIndex !== 3) return;
+                requestAnimationFrame(asteroidsUpdate);
+
+                // Control ship
+                if (leftPressed) ship.angle -= 0.06;
+                if (rightPressed) ship.angle += 0.06;
+                if (shootPressed) {
+                    shootPressed = false; // shoot once per press
+                    shootBullet();
+                }
+
+                // Move bullets
+                for (let b of bullets) {
+                    b.x += b.dx;
+                    b.y += b.dy;
+                    b.life--;
+                }
+                // Remove dead bullets
+                bullets = bullets.filter(b =>
+                    b.life > 0 &&
+                    b.x >= 0 && b.x <= canvas.width &&
+                    b.y >= 0 && b.y <= canvas.height
+                );
+
+                // Move asteroids
+                for (let a of asteroids) {
+                    a.x += a.dx;
+                    a.y += a.dy;
+                    if (a.x < 0) a.x += canvas.width;
+                    if (a.x > canvas.width) a.x -= canvas.width;
+                    if (a.y < 0) a.y += canvas.height;
+                    if (a.y > canvas.height) a.y -= canvas.height;
+                }
+
+                // Bullet vs Asteroid collisions
+                for (let b of bullets) {
+                    for (let a of asteroids) {
+                        let dx = b.x - a.x;
+                        let dy = b.y - a.y;
+                        let dist = Math.sqrt(dx * dx + dy * dy);
+                        if (dist < a.r) {
+                            // Asteroid destroyed
+                            a.x = Math.random() * canvas.width;
+                            a.y = Math.random() * canvas.height;
+                            kills++;
+                            infoEl.textContent = `Asteroids destroyed: ${kills} / 5`;
+                            if (kills >= 5) {
+                                finishGame(); // done with Asteroids
+                                return;
+                            }
+                        }
+                    }
+                }
+
+                // Ship vs Asteroid collisions (lose & reset)
+                for (let a of asteroids) {
+                    let dx = ship.x - a.x;
+                    let dy = ship.y - a.y;
+                    let dist = Math.sqrt(dx * dx + dy * dy);
+                    const shipCollisionRadius = 15; // Approx ship radius
+                    if (dist < a.r + shipCollisionRadius) {
+                        alert("You crashed into an asteroid! Resetting this game...");
+                        // Reset Asteroids
+                        kills = 0;
+                        bullets = [];
+                        for (let i = 0; i < asteroids.length; i++) {
+                            asteroids[i].x = Math.random() * canvas.width;
+                            asteroids[i].y = Math.random() * canvas.height;
+                        }
+                        // Reset ship
+                        ship.x = canvas.width / 2;
+                        ship.y = canvas.height / 2;
+                        ship.angle = 0;
+                        infoEl.textContent = "Asteroids destroyed: 0 / 5";
+                        return;
+                    }
+                }
+
+                // Draw
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                // Draw ship (tiny triangle)
+                ctx.save();
+                ctx.translate(ship.x, ship.y);
+                ctx.rotate(ship.angle);
+                ctx.beginPath();
+                ctx.moveTo(15, 0);
+                ctx.lineTo(-10, 10);
+                ctx.lineTo(-10, -10);
+                ctx.closePath();
+                ctx.fillStyle = "#e74c3c";
+                ctx.fill();
+                ctx.restore();
+
+                // Draw bullets
+                ctx.fillStyle = "#27ae60";
+                for (let b of bullets) {
+                    ctx.fillRect(b.x - 2, b.y - 2, 4, 4);
+                }
+
+                // Draw asteroids
+                ctx.strokeStyle = "#fff";
+                for (let a of asteroids) {
+                    ctx.beginPath();
+                    ctx.arc(a.x, a.y, a.r, 0, Math.PI * 2);
+                    ctx.stroke();
+                }
+            }
+            asteroidsUpdate();
         }
     </script>
 </body>
