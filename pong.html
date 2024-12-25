@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Three-Level Pong</title>
+    <style>
+        body {
+            text-align: center;
+            background: #eee;
+            margin: 0;
+            padding: 0;
+            font-family: sans-serif;
+        }
+
+        #gameCanvas {
+            background: #222;
+            display: block;
+            margin: 20px auto;
+            border: 2px solid #fff;
+        }
+
+        #info,
+        #levelAnnouncement {
+            margin-top: 10px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Three-Level Pong</h1>
+    <p>Use the Up/Down arrow keys (or W/S) to move the paddle.</p>
+
+    <canvas id="gameCanvas" width="600" height="400"></canvas>
+    <div id="levelAnnouncement"></div>
+    <div id="info"></div>
+
+    <script>
+        /********************************************************
+         *                GAME STATE AND SETTINGS               *
+         ********************************************************/
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Paddle properties
+        const paddleWidth = 10;
+        let paddleHeight = 80;        // We'll tweak this per level if needed
+        let paddleY = (canvas.height - paddleHeight) / 2;
+        const paddleX = 30;          // Distance from left edge
+
+        // Ball properties
+        let ballSize = 10;           // square "ball" for simplicity
+        let ballX = canvas.width / 2;
+        let ballY = canvas.height / 2;
+        let ballDX = 4;              // horizontal speed (+ to the right, - to the left)
+        let ballDY = 3;              // vertical speed
+
+        // Movement controls
+        let upPressed = false;
+        let downPressed = false;
+        let wPressed = false;
+        let sPressed = false;
+
+        // Levels, hints, and scoring
+        let currentLevel = 1;
+        const totalLevels = 3;
+        const levelHints = ["6", "2", "1"];
+        // The player must earn a certain number of "hits" on the ball to pass the level
+        const hitsNeededPerLevel = [5, 7, 9];
+        let hitsThisLevel = 0;
+
+        // Track if the game is still running or if the level is completed
+        let levelComplete = false;
+        let gameOver = false;
+
+        /********************************************************
+         *                EVENT LISTENERS                       *
+         ********************************************************/
+        document.addEventListener("keydown", keyDownHandler);
+        document.addEventListener("keyup", keyUpHandler);
+
+        function keyDownHandler(e) {
+            if (e.key === "ArrowUp") {
+                upPressed = true;
+            } else if (e.key === "ArrowDown") {
+                downPressed = true;
+            } else if (e.key.toLowerCase() === "w") {
+                wPressed = true;
+            } else if (e.key.toLowerCase() === "s") {
+                sPressed = true;
+            }
+        }
+
+        function keyUpHandler(e) {
+            if (e.key === "ArrowUp") {
+                upPressed = false;
+            } else if (e.key === "ArrowDown") {
+                downPressed = false;
+            } else if (e.key.toLowerCase() === "w") {
+                wPressed = false;
+            } else if (e.key.toLowerCase() === "s") {
+                sPressed = false;
+            }
+        }
+
+        /********************************************************
+         *                 LEVEL SETUP                          *
+         ********************************************************/
+        function setupLevel(level) {
+            // Reset ball to center
+            ballX = canvas.width / 2;
+            ballY = canvas.height / 2;
+
+            // Adjust difficulty
+            switch (level) {
+                case 1:
+                    // Slower ball, bigger paddle
+                    ballDX = 4;
+                    ballDY = 3;
+                    paddleHeight = 80;
+                    break;
+                case 2:
+                    // Ball speeds up a bit, paddle shrinks slightly
+                    ballDX = 5;
+                    ballDY = 4;
+                    paddleHeight = 70;
+                    break;
+                case 3:
+                    // Ball speeds up more, smaller paddle
+                    ballDX = 6;
+                    ballDY = 5;
+                    paddleHeight = 60;
+                    break;
+                default:
+                    // After level 3, the game ends
+                    endGame();
+                    return;
+            }
+
+            paddleY = (canvas.height - paddleHeight) / 2;
+            hitsThisLevel = 0;
+            levelComplete = false;
+
+            document.getElementById("levelAnnouncement").textContent = "Level " + level;
+            document.getElementById("info").textContent = "Hits needed: " + hitsNeededPerLevel[level - 1];
+        }
+
+        /********************************************************
+         *               GAME LOOP AND DRAWING                  *
+         ********************************************************/
+        function update() {
+            if (gameOver) return; // Stop updating if the game is over
+
+            // Move paddle
+            if (upPressed || wPressed) {
+                paddleY -= 6;
+            }
+            if (downPressed || sPressed) {
+                paddleY += 6;
+            }
+
+            // Constrain paddle within canvas
+            if (paddleY < 0) paddleY = 0;
+            if (paddleY + paddleHeight > canvas.height) {
+                paddleY = canvas.height - paddleHeight;
+            }
+
+            // Move ball
+            ballX += ballDX;
+            ballY += ballDY;
+
+            // Ball collision with top/bottom
+            if (ballY < 0) {
+                ballY = 0;
+                ballDY = -ballDY;
+            } else if (ballY + ballSize > canvas.height) {
+                ballY = canvas.height - ballSize;
+                ballDY = -ballDY;
+            }
+
+            // Ball collision with left paddle
+            if (
+                ballX <= paddleX + paddleWidth &&
+                ballY + ballSize >= paddleY &&
+                ballY <= paddleY + paddleHeight
+            ) {
+                // bounce off the paddle
+                ballX = paddleX + paddleWidth; // avoid glitching into paddle
+                ballDX = -ballDX;
+                hitsThisLevel++;
+                document.getElementById("info").textContent =
+                    "Hits: " + hitsThisLevel + " / " + hitsNeededPerLevel[currentLevel - 1];
+
+                // Check if level is beaten
+                if (hitsThisLevel >= hitsNeededPerLevel[currentLevel - 1]) {
+                    levelComplete = true;
+                    levelUp();
+                }
+            }
+
+            // If the ball goes past the left edge (player misses), reset hits but keep you on the same level.
+            if (ballX < 0) {
+                // Slight penalty or just reset the ball
+                ballX = canvas.width / 2;
+                ballY = canvas.height / 2;
+                ballDX = -ballDX; // reverse direction
+            }
+
+            // Ball collision with the right boundary: Just bounce like a wall
+            if (ballX + ballSize >= canvas.width) {
+                ballX = canvas.width - ballSize;
+                ballDX = -ballDX;
+            }
+
+            draw();
+            requestAnimationFrame(update);
+        }
+
+        function draw() {
+            // Clear canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Draw paddle
+            ctx.fillStyle = "white";
+            ctx.fillRect(paddleX, paddleY, paddleWidth, paddleHeight);
+
+            // Draw ball (square for simplicity)
+            ctx.fillStyle = "yellow";
+            ctx.fillRect(ballX, ballY, ballSize, ballSize);
+        }
+
+        /********************************************************
+         *           LEVEL PROGRESSION AND ENDING               *
+         ********************************************************/
+        function levelUp() {
+            if (currentLevel > totalLevels) return;
+
+            // Show the hint for the level just completed
+            alert("Level " + currentLevel + " complete! Your hint is: '" + levelHints[currentLevel - 1] + "'");
+
+            currentLevel++;
+            if (currentLevel <= totalLevels) {
+                setupLevel(currentLevel);
+            } else {
+                endGame();
+            }
+        }
+
+        function endGame() {
+            gameOver = true;
+            document.getElementById("levelAnnouncement").textContent = "Game Completed!";
+            document.getElementById("info").innerHTML = `
+        You beat all levels! Here are your hints:<br>
+        Level 1: '${levelHints[0]}'<br>
+        Level 2: '${levelHints[1]}'<br>
+        Level 3: '${levelHints[2]}'<br>
+      `;
+        }
+
+        /********************************************************
+         *                      STARTUP                         *
+         ********************************************************/
+        // Initialize Level 1 settings
+        setupLevel(1);
+        update(); // Kick off the game loop
+    </script>
+</body>
+
+</html>
