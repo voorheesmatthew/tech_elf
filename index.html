@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Christmas Tech Elf Pong</title>
+    <title>Christmas Tech Elf Pong (Mobile-Friendly)</title>
     <style>
         /* Body styling: a subtle cosmic/holiday vibe */
         body {
@@ -33,8 +33,14 @@
         }
 
         #gameCanvas {
+            /* Keep an internal resolution of 600x400,
+         but let it resize responsively. */
+            width: 100%;
+            max-width: 600px;
+            height: auto;
             background: #111;
-            display: block;
+            display: none;
+            /* hidden until game starts */
             margin: 20px auto;
             border: 2px solid #f39c12;
         }
@@ -44,12 +50,16 @@
             margin-top: 10px;
             font-weight: bold;
             color: #1abc9c;
+            display: none;
+            /* hidden until game starts */
         }
 
         #footerMessage {
             margin: 20px;
             color: #f1c40f;
             font-style: italic;
+            display: none;
+            /* hidden until game starts */
         }
 
         button {
@@ -66,23 +76,47 @@
         button:hover {
             background: #16a085;
         }
+
+        /* On-screen mobile controls */
+        #mobileControls {
+            display: none;
+            /* We'll show this once the game starts */
+            margin-top: 15px;
+        }
+
+        #btnUp,
+        #btnDown {
+            margin: 0 10px;
+            font-size: 16px;
+        }
+
+        /* Optional: Hide on-screen controls on wider screens if you prefer 
+       You can tweak or remove this media query if you want them always visible */
+        @media (min-width: 800px) {
+            #mobileControls {
+                display: none !important;
+                /* Force hide on large screens */
+            }
+        }
     </style>
 </head>
 
 <body>
     <h1>Christmas Tech Elf Pong</h1>
 
+    <!-- Story and "Begin" button -->
     <div id="storyline">
         <p>
             A <strong>rogue robot elf</strong> in Santa’s workshop has gone haywire—he’s locked all the Christmas
-            presents in a futuristic storage container. The only way to open it is by entering the <em>correct access
-                code</em> into his top-secret database interface.
+            presents in a futuristic storage container.
+            The only way to open it is by entering the <em>correct access code</em> into his top-secret database
+            interface.
         </p>
         <p>
             However, this mischievous elf didn’t make it easy. To retrieve the code, you must beat his
-            <strong>three-level Pong security system</strong>. Keep your sleigh—well, in this version it's just a
-            <em>red paddle</em>—under control, bounce the <em>green ball</em>, and rack up enough hits in each level to
-            progress. Every time you pass a level, you’ll receive a piece of the code.
+            <strong>three-level Pong security system</strong>. Control the <em>red paddle</em>, bounce
+            the <em>green ball</em>, and rack up enough hits in each level to progress. Each level
+            grants you a piece of the code.
         </p>
         <p>
             Santa is counting on you—can you outsmart the evil robot elf and save Christmas?
@@ -90,10 +124,20 @@
         <button onclick="startGame()">Begin the Challenge!</button>
     </div>
 
-    <canvas id="gameCanvas" width="600" height="400" style="display:none;"></canvas>
-    <div id="levelAnnouncement" style="display:none;"></div>
-    <div id="info" style="display:none;"></div>
-    <div id="footerMessage" style="display:none;">All is not lost... yet!</div>
+    <!-- The game canvas -->
+    <!-- Note: we keep internal resolution at 600x400, but let CSS scale it -->
+    <canvas id="gameCanvas" width="600" height="400"></canvas>
+
+    <!-- Level and status text -->
+    <div id="levelAnnouncement"></div>
+    <div id="info"></div>
+    <div id="footerMessage">All is not lost... yet!</div>
+
+    <!-- On-screen controls (mobile/touch) -->
+    <div id="mobileControls">
+        <button id="btnUp">Move Paddle Up</button>
+        <button id="btnDown">Move Paddle Down</button>
+    </div>
 
     <script>
         /********************************************************
@@ -115,16 +159,20 @@
         let ballDX = 4;               // horizontal speed
         let ballDY = 3;               // vertical speed
 
-        // Movement controls
+        // Movement controls (desktop)
         let upPressed = false;
         let downPressed = false;
         let wPressed = false;
         let sPressed = false;
 
+        // Movement controls (mobile/touch)
+        let moveUp = false;
+        let moveDown = false;
+
         // Levels, hints, and scoring
         let currentLevel = 1;
         const totalLevels = 3;
-        const levelHints = ["6", "2", "1"];        // Code digits
+        const levelHints = ["6", "2", "1"];  // The code digits
         const hitsNeededPerLevel = [5, 7, 9];
         let hitsThisLevel = 0;
 
@@ -134,7 +182,7 @@
         let gameStarted = false;
 
         /********************************************************
-         *                EVENT LISTENERS                       *
+         *               EVENT LISTENERS (DESKTOP)              *
          ********************************************************/
         document.addEventListener("keydown", keyDownHandler);
         document.addEventListener("keyup", keyUpHandler);
@@ -164,6 +212,30 @@
         }
 
         /********************************************************
+         *             EVENT LISTENERS (MOBILE TOUCH)           *
+         ********************************************************/
+        const btnUp = document.getElementById("btnUp");
+        const btnDown = document.getElementById("btnDown");
+
+        // Mouse/Touch events for the Up button
+        btnUp.addEventListener("mousedown", () => { moveUp = true; });
+        btnUp.addEventListener("mouseup", () => { moveUp = false; });
+        btnUp.addEventListener("touchstart", (e) => {
+            e.preventDefault();
+            moveUp = true;
+        });
+        btnUp.addEventListener("touchend", () => { moveUp = false; });
+
+        // Mouse/Touch events for the Down button
+        btnDown.addEventListener("mousedown", () => { moveDown = true; });
+        btnDown.addEventListener("mouseup", () => { moveDown = false; });
+        btnDown.addEventListener("touchstart", (e) => {
+            e.preventDefault();
+            moveDown = true;
+        });
+        btnDown.addEventListener("touchend", () => { moveDown = false; });
+
+        /********************************************************
          *                 LEVEL SETUP                          *
          ********************************************************/
         function setupLevel(level) {
@@ -171,7 +243,7 @@
             ballX = canvas.width / 2;
             ballY = canvas.height / 2;
 
-            // Adjust difficulty
+            // Adjust difficulty by level
             switch (level) {
                 case 1:
                     paddleHeight = 80;
@@ -209,11 +281,19 @@
         function update() {
             if (!gameStarted || gameOver) return;
 
-            // Move paddle
+            // Move paddle (desktop)
             if (upPressed || wPressed) {
                 paddleY -= 6;
             }
             if (downPressed || sPressed) {
+                paddleY += 6;
+            }
+
+            // Move paddle (mobile)
+            if (moveUp) {
+                paddleY -= 6;
+            }
+            if (moveDown) {
                 paddleY += 6;
             }
 
@@ -231,8 +311,7 @@
             if (ballY - ballRadius < 0) {
                 ballY = ballRadius;
                 ballDY = -ballDY;
-            }
-            else if (ballY + ballRadius > canvas.height) {
+            } else if (ballY + ballRadius > canvas.height) {
                 ballY = canvas.height - ballRadius;
                 ballDY = -ballDY;
             }
@@ -241,8 +320,7 @@
             if (
                 // Ball's leftmost edge <= Paddle's right edge
                 (ballX - ballRadius) <= (paddleX + paddleWidth) &&
-                // Ball's rightmost edge >= Paddle's left edge (this isn't strictly necessary 
-                // in a 1-paddle game, but included for completeness)
+                // Ball's rightmost edge >= Paddle's left edge
                 (ballX + ballRadius) >= paddleX &&
                 // Ball's bottom edge >= top of paddle
                 (ballY + ballRadius) >= paddleY &&
@@ -250,7 +328,8 @@
                 (ballY - ballRadius) <= (paddleY + paddleHeight)
             ) {
                 // Bounce off the paddle
-                ballX = paddleX + paddleWidth + ballRadius; // push the ball away from the paddle
+                // Place the ball just to the right of the paddle to avoid 'sticking'
+                ballX = paddleX + paddleWidth + ballRadius;
                 ballDX = -ballDX;
                 hitsThisLevel++;
                 document.getElementById("info").textContent =
@@ -286,13 +365,14 @@
          *                     DRAWING                          *
          ********************************************************/
         function draw() {
+            // Clear the whole canvas
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            // Draw the "red" paddle
+            // Draw the red paddle
             ctx.fillStyle = "#e74c3c";  // bright red
             ctx.fillRect(paddleX, paddleY, paddleWidth, paddleHeight);
 
-            // Draw the "green" ball (circle)
+            // Draw the green ball (circle)
             ctx.beginPath();
             ctx.arc(ballX, ballY, ballRadius, 0, Math.PI * 2);
             ctx.fillStyle = "#27ae60"; // bright green
@@ -340,10 +420,12 @@
         function startGame() {
             // Hide storyline, show canvas & text
             document.getElementById("storyline").style.display = "none";
-            canvas.style.display = "block";
+
+            document.getElementById("gameCanvas").style.display = "block";
             document.getElementById("levelAnnouncement").style.display = "block";
             document.getElementById("info").style.display = "block";
             document.getElementById("footerMessage").style.display = "block";
+            document.getElementById("mobileControls").style.display = "block";
 
             gameStarted = true;
             currentLevel = 1;
