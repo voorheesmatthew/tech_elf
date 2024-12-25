@@ -4,58 +4,116 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Three-Level Pong</title>
+    <title>Christmas Tech Elf Pong</title>
     <style>
+        /* Body styling: a subtle cosmic/holiday vibe */
         body {
-            text-align: center;
-            background: #eee;
             margin: 0;
             padding: 0;
-            font-family: sans-serif;
+            font-family: "Trebuchet MS", sans-serif;
+            text-align: center;
+            background: radial-gradient(circle at top, #0f2027, #203a43, #2c5364);
+            color: #ecf0f1;
+        }
+
+        h1 {
+            margin-top: 20px;
+            color: #f39c12;
+            text-shadow: 2px 2px 5px rgba(0, 0, 0, 0.6);
+        }
+
+        #storyline {
+            margin: 0 20px;
+            max-width: 800px;
+            text-align: left;
+            margin: 20px auto;
+            border: 2px dashed #f39c12;
+            padding: 20px;
+            background-color: rgba(255, 255, 255, 0.1);
         }
 
         #gameCanvas {
-            background: #222;
+            background: #111;
             display: block;
             margin: 20px auto;
-            border: 2px solid #fff;
+            border: 2px solid #f39c12;
         }
 
-        #info,
-        #levelAnnouncement {
+        #levelAnnouncement,
+        #info {
             margin-top: 10px;
             font-weight: bold;
+            color: #1abc9c;
+        }
+
+        #footerMessage {
+            margin: 20px;
+            color: #f1c40f;
+            font-style: italic;
+        }
+
+        button {
+            background: #1abc9c;
+            border: none;
+            padding: 10px 15px;
+            margin-top: 10px;
+            color: white;
+            font-weight: bold;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #16a085;
         }
     </style>
 </head>
 
 <body>
-    <h1>Three-Level Pong</h1>
-    <p>Use the Up/Down arrow keys (or W/S) to move the paddle.</p>
+    <h1>Christmas Tech Elf Pong</h1>
 
-    <canvas id="gameCanvas" width="600" height="400"></canvas>
-    <div id="levelAnnouncement"></div>
-    <div id="info"></div>
+    <div id="storyline">
+        <p>
+            A <strong>rogue robot elf</strong> in Santa’s workshop has gone haywire—he’s locked all the Christmas
+            presents in a futuristic storage container. The only way to open it is by entering the <em>correct access
+                code</em> into his top-secret database interface.
+        </p>
+        <p>
+            However, this mischievous elf didn’t make it easy. To retrieve the code, you must beat his
+            <strong>three-level Pong security system</strong>. Keep your sleigh—well, in this version it's just a
+            <em>red paddle</em>—under control, bounce the <em>green ball</em>, and rack up enough hits in each level to
+            progress. Every time you pass a level, you’ll receive a piece of the code.
+        </p>
+        <p>
+            Santa is counting on you—can you outsmart the evil robot elf and save Christmas?
+        </p>
+        <button onclick="startGame()">Begin the Challenge!</button>
+    </div>
+
+    <canvas id="gameCanvas" width="600" height="400" style="display:none;"></canvas>
+    <div id="levelAnnouncement" style="display:none;"></div>
+    <div id="info" style="display:none;"></div>
+    <div id="footerMessage" style="display:none;">All is not lost... yet!</div>
 
     <script>
         /********************************************************
          *                GAME STATE AND SETTINGS               *
          ********************************************************/
-        const canvas = document.getElementById('gameCanvas');
-        const ctx = canvas.getContext('2d');
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
 
-        // Paddle properties
+        // Paddle (red rectangle) properties
         const paddleWidth = 10;
         let paddleHeight = 80;        // We'll tweak this per level if needed
         let paddleY = (canvas.height - paddleHeight) / 2;
-        const paddleX = 30;          // Distance from left edge
+        const paddleX = 30;           // Distance from left edge
 
-        // Ball properties
-        let ballSize = 10;           // square "ball" for simplicity
+        // Ball (green circle) properties
+        let ballRadius = 12;          // Circle radius
         let ballX = canvas.width / 2;
         let ballY = canvas.height / 2;
-        let ballDX = 4;              // horizontal speed (+ to the right, - to the left)
-        let ballDY = 3;              // vertical speed
+        let ballDX = 4;               // horizontal speed
+        let ballDY = 3;               // vertical speed
 
         // Movement controls
         let upPressed = false;
@@ -66,14 +124,14 @@
         // Levels, hints, and scoring
         let currentLevel = 1;
         const totalLevels = 3;
-        const levelHints = ["6", "2", "1"];
-        // The player must earn a certain number of "hits" on the ball to pass the level
+        const levelHints = ["6", "2", "1"];        // Code digits
         const hitsNeededPerLevel = [5, 7, 9];
         let hitsThisLevel = 0;
 
-        // Track if the game is still running or if the level is completed
+        // State flags
         let levelComplete = false;
         let gameOver = false;
+        let gameStarted = false;
 
         /********************************************************
          *                EVENT LISTENERS                       *
@@ -116,25 +174,21 @@
             // Adjust difficulty
             switch (level) {
                 case 1:
-                    // Slower ball, bigger paddle
+                    paddleHeight = 80;
                     ballDX = 4;
                     ballDY = 3;
-                    paddleHeight = 80;
                     break;
                 case 2:
-                    // Ball speeds up a bit, paddle shrinks slightly
+                    paddleHeight = 70;
                     ballDX = 5;
                     ballDY = 4;
-                    paddleHeight = 70;
                     break;
                 case 3:
-                    // Ball speeds up more, smaller paddle
+                    paddleHeight = 60;
                     ballDX = 6;
                     ballDY = 5;
-                    paddleHeight = 60;
                     break;
                 default:
-                    // After level 3, the game ends
                     endGame();
                     return;
             }
@@ -143,15 +197,17 @@
             hitsThisLevel = 0;
             levelComplete = false;
 
-            document.getElementById("levelAnnouncement").textContent = "Level " + level;
-            document.getElementById("info").textContent = "Hits needed: " + hitsNeededPerLevel[level - 1];
+            document.getElementById("levelAnnouncement").textContent =
+                "LEVEL " + level + ": Evil Elf's Security Barrier #" + level;
+            document.getElementById("info").textContent =
+                "Hits needed to bypass: " + hitsNeededPerLevel[level - 1];
         }
 
         /********************************************************
-         *               GAME LOOP AND DRAWING                  *
+         *                MAIN GAME LOOP                        *
          ********************************************************/
         function update() {
-            if (gameOver) return; // Stop updating if the game is over
+            if (!gameStarted || gameOver) return;
 
             // Move paddle
             if (upPressed || wPressed) {
@@ -161,7 +217,7 @@
                 paddleY += 6;
             }
 
-            // Constrain paddle within canvas
+            // Constrain paddle
             if (paddleY < 0) paddleY = 0;
             if (paddleY + paddleHeight > canvas.height) {
                 paddleY = canvas.height - paddleHeight;
@@ -172,26 +228,33 @@
             ballY += ballDY;
 
             // Ball collision with top/bottom
-            if (ballY < 0) {
-                ballY = 0;
+            if (ballY - ballRadius < 0) {
+                ballY = ballRadius;
                 ballDY = -ballDY;
-            } else if (ballY + ballSize > canvas.height) {
-                ballY = canvas.height - ballSize;
+            }
+            else if (ballY + ballRadius > canvas.height) {
+                ballY = canvas.height - ballRadius;
                 ballDY = -ballDY;
             }
 
-            // Ball collision with left paddle
+            // Check collision with the paddle
             if (
-                ballX <= paddleX + paddleWidth &&
-                ballY + ballSize >= paddleY &&
-                ballY <= paddleY + paddleHeight
+                // Ball's leftmost edge <= Paddle's right edge
+                (ballX - ballRadius) <= (paddleX + paddleWidth) &&
+                // Ball's rightmost edge >= Paddle's left edge (this isn't strictly necessary 
+                // in a 1-paddle game, but included for completeness)
+                (ballX + ballRadius) >= paddleX &&
+                // Ball's bottom edge >= top of paddle
+                (ballY + ballRadius) >= paddleY &&
+                // Ball's top edge <= bottom of paddle
+                (ballY - ballRadius) <= (paddleY + paddleHeight)
             ) {
-                // bounce off the paddle
-                ballX = paddleX + paddleWidth; // avoid glitching into paddle
+                // Bounce off the paddle
+                ballX = paddleX + paddleWidth + ballRadius; // push the ball away from the paddle
                 ballDX = -ballDX;
                 hitsThisLevel++;
                 document.getElementById("info").textContent =
-                    "Hits: " + hitsThisLevel + " / " + hitsNeededPerLevel[currentLevel - 1];
+                    "Hits so far: " + hitsThisLevel + " / " + hitsNeededPerLevel[currentLevel - 1];
 
                 // Check if level is beaten
                 if (hitsThisLevel >= hitsNeededPerLevel[currentLevel - 1]) {
@@ -200,17 +263,18 @@
                 }
             }
 
-            // If the ball goes past the left edge (player misses), reset hits but keep you on the same level.
-            if (ballX < 0) {
-                // Slight penalty or just reset the ball
+            // If ball goes past left edge
+            if (ballX + ballRadius < 0) {
+                // Reset ball to center
                 ballX = canvas.width / 2;
                 ballY = canvas.height / 2;
-                ballDX = -ballDX; // reverse direction
+                // Flip direction so it heads right again
+                ballDX = -ballDX;
             }
 
-            // Ball collision with the right boundary: Just bounce like a wall
-            if (ballX + ballSize >= canvas.width) {
-                ballX = canvas.width - ballSize;
+            // If ball hits right boundary
+            if (ballX + ballRadius > canvas.width) {
+                ballX = canvas.width - ballRadius;
                 ballDX = -ballDX;
             }
 
@@ -218,27 +282,34 @@
             requestAnimationFrame(update);
         }
 
+        /********************************************************
+         *                     DRAWING                          *
+         ********************************************************/
         function draw() {
-            // Clear canvas
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            // Draw paddle
-            ctx.fillStyle = "white";
+            // Draw the "red" paddle
+            ctx.fillStyle = "#e74c3c";  // bright red
             ctx.fillRect(paddleX, paddleY, paddleWidth, paddleHeight);
 
-            // Draw ball (square for simplicity)
-            ctx.fillStyle = "yellow";
-            ctx.fillRect(ballX, ballY, ballSize, ballSize);
+            // Draw the "green" ball (circle)
+            ctx.beginPath();
+            ctx.arc(ballX, ballY, ballRadius, 0, Math.PI * 2);
+            ctx.fillStyle = "#27ae60"; // bright green
+            ctx.fill();
+            ctx.closePath();
         }
 
         /********************************************************
-         *           LEVEL PROGRESSION AND ENDING               *
+         *           LEVEL PROGRESSION & ENDING                 *
          ********************************************************/
         function levelUp() {
             if (currentLevel > totalLevels) return;
 
-            // Show the hint for the level just completed
-            alert("Level " + currentLevel + " complete! Your hint is: '" + levelHints[currentLevel - 1] + "'");
+            alert(
+                "Security Barrier #" + currentLevel + " breached!\n" +
+                "The Evil Elf grudgingly reveals a code digit: '" + levelHints[currentLevel - 1] + "'"
+            );
 
             currentLevel++;
             if (currentLevel <= totalLevels) {
@@ -250,21 +321,35 @@
 
         function endGame() {
             gameOver = true;
-            document.getElementById("levelAnnouncement").textContent = "Game Completed!";
+            document.getElementById("levelAnnouncement").textContent =
+                "ALL BARRIERS BYPASSED!";
             document.getElementById("info").innerHTML = `
-        You beat all levels! Here are your hints:<br>
+        <strong>Access Code Retrieved:</strong><br>
         Level 1: '${levelHints[0]}'<br>
         Level 2: '${levelHints[1]}'<br>
-        Level 3: '${levelHints[2]}'<br>
+        Level 3: '${levelHints[2]}'<br><br>
+        <em>Use this code to unlock the presents!</em>
       `;
+            document.getElementById("footerMessage").textContent =
+                "You’ve outsmarted the evil robot elf! Christmas is saved!";
         }
 
         /********************************************************
-         *                      STARTUP                         *
+         *               GAME START FUNCTION                    *
          ********************************************************/
-        // Initialize Level 1 settings
-        setupLevel(1);
-        update(); // Kick off the game loop
+        function startGame() {
+            // Hide storyline, show canvas & text
+            document.getElementById("storyline").style.display = "none";
+            canvas.style.display = "block";
+            document.getElementById("levelAnnouncement").style.display = "block";
+            document.getElementById("info").style.display = "block";
+            document.getElementById("footerMessage").style.display = "block";
+
+            gameStarted = true;
+            currentLevel = 1;
+            setupLevel(currentLevel);
+            update();
+        }
     </script>
 </body>
 
